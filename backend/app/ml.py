@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 _spacy_nlp = None
 _tfidf_vectorizer = None
+_embedding_model = None
 
 
 def _get_spacy():
@@ -29,12 +30,33 @@ def _get_spacy():
     if _spacy_nlp is None:
         try:
             import spacy
+
             _spacy_nlp = spacy.load("en_core_web_sm")
             logger.info("spaCy model loaded successfully")
         except OSError:
-            logger.warning("spaCy model 'en_core_web_sm' not found. Run: python -m spacy download en_core_web_sm")
+            logger.warning(
+                "spaCy model 'en_core_web_sm' not found. Run: python -m spacy download en_core_web_sm"
+            )
             _spacy_nlp = False  # Mark as failed so we don't retry
     return _spacy_nlp if _spacy_nlp is not False else None
+
+
+def _get_embedding_model():
+    """Lazy-load sentence-transformers model."""
+    global _embedding_model
+    if _embedding_model is None:
+        try:
+            from sentence_transformers import SentenceTransformer
+
+            _embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
+            logger.info("SentenceTransformer 'all-MiniLM-L6-v2' loaded successfully")
+        except ImportError:
+            logger.warning("sentence-transformers not installed. Fallback to TF-IDF.")
+            _embedding_model = False
+        except Exception as exc:
+            logger.warning("Failed to load sentence-transformers model: %s", exc)
+            _embedding_model = False
+    return _embedding_model if _embedding_model is not False else None
 
 
 # ---------------------------------------------------------------------------
@@ -43,49 +65,162 @@ def _get_spacy():
 
 TECH_SKILLS = {
     # Programming Languages
-    "python", "javascript", "typescript", "java", "c++", "c#", "go", "golang",
-    "rust", "ruby", "php", "swift", "kotlin", "scala", "r", "matlab", "perl",
-    "dart", "lua", "haskell", "elixir", "clojure",
-
+    "python",
+    "javascript",
+    "typescript",
+    "java",
+    "c++",
+    "c#",
+    "go",
+    "golang",
+    "rust",
+    "ruby",
+    "php",
+    "swift",
+    "kotlin",
+    "scala",
+    "r",
+    "matlab",
+    "perl",
+    "dart",
+    "lua",
+    "haskell",
+    "elixir",
+    "clojure",
     # Frontend
-    "react", "reactjs", "react.js", "angular", "vue", "vuejs", "vue.js",
-    "next.js", "nextjs", "nuxt", "svelte", "html", "css", "sass", "scss",
-    "tailwind", "tailwindcss", "bootstrap", "jquery", "webpack", "vite",
-    "redux", "zustand", "framer motion",
-
+    "react",
+    "reactjs",
+    "react.js",
+    "angular",
+    "vue",
+    "vuejs",
+    "vue.js",
+    "next.js",
+    "nextjs",
+    "nuxt",
+    "svelte",
+    "html",
+    "css",
+    "sass",
+    "scss",
+    "tailwind",
+    "tailwindcss",
+    "bootstrap",
+    "jquery",
+    "webpack",
+    "vite",
+    "redux",
+    "zustand",
+    "framer motion",
     # Backend
-    "node", "nodejs", "node.js", "express", "expressjs", "fastapi", "flask",
-    "django", "spring", "spring boot", "laravel", "rails", "ruby on rails",
-    "asp.net", "gin", "fiber", "nestjs",
-
+    "node",
+    "nodejs",
+    "node.js",
+    "express",
+    "expressjs",
+    "fastapi",
+    "flask",
+    "django",
+    "spring",
+    "spring boot",
+    "laravel",
+    "rails",
+    "ruby on rails",
+    "asp.net",
+    "gin",
+    "fiber",
+    "nestjs",
     # Databases
-    "sql", "mysql", "postgresql", "postgres", "mongodb", "redis", "sqlite",
-    "dynamodb", "cassandra", "elasticsearch", "neo4j", "firebase", "supabase",
-    "prisma", "sequelize", "sqlalchemy", "mongoose",
-
+    "sql",
+    "mysql",
+    "postgresql",
+    "postgres",
+    "mongodb",
+    "redis",
+    "sqlite",
+    "dynamodb",
+    "cassandra",
+    "elasticsearch",
+    "neo4j",
+    "firebase",
+    "supabase",
+    "prisma",
+    "sequelize",
+    "sqlalchemy",
+    "mongoose",
     # Cloud & DevOps
-    "aws", "azure", "gcp", "google cloud", "docker", "kubernetes", "k8s",
-    "terraform", "ansible", "jenkins", "ci/cd", "github actions", "gitlab ci",
-    "nginx", "apache", "linux", "bash", "shell scripting",
-
+    "aws",
+    "azure",
+    "gcp",
+    "google cloud",
+    "docker",
+    "kubernetes",
+    "k8s",
+    "terraform",
+    "ansible",
+    "jenkins",
+    "ci/cd",
+    "github actions",
+    "gitlab ci",
+    "nginx",
+    "apache",
+    "linux",
+    "bash",
+    "shell scripting",
     # AI/ML
-    "machine learning", "deep learning", "tensorflow", "pytorch", "keras",
-    "scikit-learn", "sklearn", "pandas", "numpy", "opencv", "nlp",
-    "natural language processing", "computer vision", "transformers",
-    "hugging face", "langchain", "openai", "llm",
-
+    "machine learning",
+    "deep learning",
+    "tensorflow",
+    "pytorch",
+    "keras",
+    "scikit-learn",
+    "sklearn",
+    "pandas",
+    "numpy",
+    "opencv",
+    "nlp",
+    "natural language processing",
+    "computer vision",
+    "transformers",
+    "hugging face",
+    "langchain",
+    "openai",
+    "llm",
     # Tools & Misc
-    "git", "github", "gitlab", "bitbucket", "jira", "confluence",
-    "figma", "postman", "swagger", "graphql", "rest", "restful",
-    "api", "microservices", "agile", "scrum", "kanban",
-    "testing", "jest", "pytest", "unittest", "cypress", "selenium",
-    "oauth", "jwt", "websockets", "grpc",
+    "git",
+    "github",
+    "gitlab",
+    "bitbucket",
+    "jira",
+    "confluence",
+    "figma",
+    "postman",
+    "swagger",
+    "graphql",
+    "rest",
+    "restful",
+    "api",
+    "microservices",
+    "agile",
+    "scrum",
+    "kanban",
+    "testing",
+    "jest",
+    "pytest",
+    "unittest",
+    "cypress",
+    "selenium",
+    "oauth",
+    "jwt",
+    "websockets",
+    "grpc",
 }
 
 
 # ---------------------------------------------------------------------------
 # Feature 1: Resume Skill Extraction
 # ---------------------------------------------------------------------------
+
 
 def extract_skills(text: str) -> list[str]:
     """
@@ -99,27 +234,23 @@ def extract_skills(text: str) -> list[str]:
     found_skills: set[str] = set()
     text_lower = text.lower()
     # Normalize separators and spacing for multi-word skill matching
-    normalized_text = re.sub(r'[-_/]', ' ', text_lower)
-    normalized_text = re.sub(r'\s+', ' ', normalized_text).strip()
-
+    normalized_text = re.sub(r"[-_/]", " ", text_lower)
+    normalized_text = re.sub(r"\s+", " ", normalized_text).strip()
 
     # Method 1: Keyword matching against curated skill list
     for skill in sorted(TECH_SKILLS, key=len, reverse=True):
         # Multi-word skills need safer boundary handling
-        if ' ' in skill:
-            pattern = r'(?<!\w)' + re.escape(skill) + r'(?!\w)'
+        if " " in skill:
+            pattern = r"(?<!\w)" + re.escape(skill) + r"(?!\w)"
         else:
-            pattern = r'\b' + re.escape(skill) + r'\b'
+            pattern = r"\b" + re.escape(skill) + r"\b"
 
         if re.search(pattern, normalized_text):
-
             # Avoid adding shorter overlapping skills
             if any(skill in existing.lower() for existing in found_skills):
                 continue
 
-            found_skills.add(
-                skill.title() if len(skill) > 3 else skill.upper()
-            )
+            found_skills.add(skill.title() if len(skill) > 3 else skill.upper())
 
     # Method 2: spaCy NER to catch additional entities
     nlp = _get_spacy()
@@ -143,15 +274,18 @@ def extract_skills(text: str) -> list[str]:
 # Feature 2: Resume ↔ JD Match Score
 # ---------------------------------------------------------------------------
 
-def compute_match_score(resume_text: str, jd_text: str) -> int:
-    """
-    Compute similarity between resume and job description using TF-IDF + cosine similarity.
 
-    Returns an integer score from 0 to 100.
+def compute_match_score(resume_text: str, jd_text: str) -> dict[str, int]:
+    """
+    Compute similarity between resume and job description using semantic embeddings
+    and TF-IDF fallback.
+
+    Returns a dict with semanticScore, keywordOverlapScore, and overallScore (0-100).
     """
     if not resume_text or not jd_text or not resume_text.strip() or not jd_text.strip():
-        return 50  # Default when either text is missing
+        return {"semanticScore": 0, "keywordOverlapScore": 0, "overallScore": 0}
 
+    keyword_score = 0
     try:
         from sklearn.feature_extraction.text import TfidfVectorizer
         from sklearn.metrics.pairwise import cosine_similarity
@@ -167,20 +301,41 @@ def compute_match_score(resume_text: str, jd_text: str) -> int:
         similarity = cosine_similarity(tfidf_matrix[0:1], tfidf_matrix[1:2])[0][0]
 
         # Scale similarity (typically 0.0-0.5 range) to a more intuitive 0-100 score
-        # Apply a scaling curve: raw scores above 0.3 are strong matches
-        scaled = min(100, max(0, int(similarity * 200)))
-
-        # Clamp to a reasonable range (30-95) to avoid extremes
-        return max(30, min(95, scaled))
+        keyword_score = min(100, max(0, int(similarity * 200)))
 
     except Exception as exc:
         logger.warning("TF-IDF match score failed: %s", exc)
-        return 50
+
+    semantic_score = 0
+    embedding_model = _get_embedding_model()
+
+    if embedding_model:
+        try:
+            from sklearn.metrics.pairwise import cosine_similarity
+
+            embeddings = embedding_model.encode([resume_text, jd_text])
+            sim_score = cosine_similarity([embeddings[0]], [embeddings[1]])[0][0]
+            semantic_score = min(100, max(0, int(sim_score * 100)))
+        except Exception as exc:
+            logger.warning("Semantic match score failed: %s", exc)
+            embedding_model = False  # Mark as failed for this run
+
+    if embedding_model:
+        overall_score = int((semantic_score * 0.7) + (keyword_score * 0.3))
+    else:
+        overall_score = keyword_score
+
+    return {
+        "semanticScore": semantic_score,
+        "keywordOverlapScore": keyword_score,
+        "overallScore": overall_score,
+    }
 
 
 # ---------------------------------------------------------------------------
 # Feature 3: Answer Confidence Analysis
 # ---------------------------------------------------------------------------
+
 
 def analyze_confidence(answer_text: str) -> dict[str, Any]:
     """
@@ -203,7 +358,7 @@ def analyze_confidence(answer_text: str) -> dict[str, Any]:
 
     words = answer_text.split()
     word_count = len(words)
-    sentences = [s.strip() for s in re.split(r'[.!?]+', answer_text) if s.strip()]
+    sentences = [s.strip() for s in re.split(r"[.!?]+", answer_text) if s.strip()]
     sentence_count = max(1, len(sentences))
 
     # --- Sentiment analysis with TextBlob ---
@@ -211,8 +366,9 @@ def analyze_confidence(answer_text: str) -> dict[str, Any]:
 
     try:
         from textblob import TextBlob
+
         blob = TextBlob(answer_text)
-        polarity = blob.sentiment.polarity        # -1.0 to 1.0
+        polarity = blob.sentiment.polarity  # -1.0 to 1.0
 
     except Exception as exc:
         logger.warning("TextBlob sentiment analysis failed: %s", exc)
@@ -227,10 +383,25 @@ def analyze_confidence(answer_text: str) -> dict[str, Any]:
 
     # --- Specificity score ---
     # More numbers, percentages, and concrete metrics = more specific
-    number_count = len(re.findall(r'\b\d+[\d,.]*%?\b', answer_text))
-    metric_keywords = ["increased", "decreased", "improved", "reduced", "achieved",
-                       "delivered", "built", "managed", "led", "saved", "generated",
-                       "revenue", "users", "clients", "team", "project"]
+    number_count = len(re.findall(r"\b\d+[\d,.]*%?\b", answer_text))
+    metric_keywords = [
+        "increased",
+        "decreased",
+        "improved",
+        "reduced",
+        "achieved",
+        "delivered",
+        "built",
+        "managed",
+        "led",
+        "saved",
+        "generated",
+        "revenue",
+        "users",
+        "clients",
+        "team",
+        "project",
+    ]
     metric_hits = sum(1 for kw in metric_keywords if kw in answer_text.lower())
 
     specificity_raw = (number_count * 15) + (metric_hits * 8)
@@ -238,12 +409,14 @@ def analyze_confidence(answer_text: str) -> dict[str, Any]:
 
     # --- Confidence score ---
     # Composite of: sentiment, length, specificity, sentence structure
-    length_score = min(40, word_count * 0.2)           # Up to 40 pts for length (200+ words)
-    sentiment_score = max(0, (polarity + 1) * 15)      # Up to 30 pts for positive tone
-    specificity_score = specificity * 0.2               # Up to 20 pts for specifics
-    structure_score = min(10, sentence_count * 2)       # Up to 10 pts for multi-sentence
+    length_score = min(40, word_count * 0.2)  # Up to 40 pts for length (200+ words)
+    sentiment_score = max(0, (polarity + 1) * 15)  # Up to 30 pts for positive tone
+    specificity_score = specificity * 0.2  # Up to 20 pts for specifics
+    structure_score = min(10, sentence_count * 2)  # Up to 10 pts for multi-sentence
 
-    confidence_score = int(min(100, length_score + sentiment_score + specificity_score + structure_score))
+    confidence_score = int(
+        min(100, length_score + sentiment_score + specificity_score + structure_score)
+    )
 
     return {
         "confidenceScore": confidence_score,

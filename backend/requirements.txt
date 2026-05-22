@@ -8,3 +8,4 @@ scikit-learn==1.5.2
 textblob==0.18.0
 httpx
 ruff
+sentence-transformers
